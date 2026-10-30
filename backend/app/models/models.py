@@ -5,6 +5,11 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
+# Import ProvenanceGuard models to register them with SQLAlchemy metadata
+from app.models.provenance_models import (  # noqa: F401
+    KeyRegistry, SignatureRecord, AuditCheckpoint, ProvenanceDerivative
+)
+
 
 class User(Base):
     __tablename__ = "users"
@@ -77,11 +82,21 @@ class SecurityTest(Base):
 class EvidenceRecord(Base):
     __tablename__ = "evidence_records"
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     evidence_name = Column(String(255), nullable=False)
     evidence_type = Column(String(100))
     evidence_hash = Column(String(64), nullable=False)
     uploaded_by = Column(String(255))
     created_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("User", backref="evidence_records")
+
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String(64), unique=True, index=True, nullable=False)
+    revoked_at = Column(DateTime, server_default=func.now())
 
 
 class AuditLog(Base):
@@ -105,4 +120,23 @@ class TrustReport(Base):
     security_score = Column(Float, default=0.0)
     overall_status = Column(String(100))
     created_at = Column(DateTime, server_default=func.now())
+
+
+class FileComparison(Base):
+    __tablename__ = "file_comparisons"
+    id = Column(Integer, primary_key=True, index=True)
+    comparison_id = Column(String(64), unique=True, index=True, nullable=False)
+    original_file_id = Column(Integer, ForeignKey("uploaded_files.id"), nullable=True)
+    original_hash = Column(String(64), nullable=False)
+    uploaded_hash = Column(String(64), nullable=False)
+    hash_match_status = Column(String(20), nullable=False)  # MATCH / MISMATCH
+    file_type = Column(String(50), nullable=False)
+    comparison_method = Column(String(100), nullable=False)
+    change_percentage = Column(Float, default=0.0)
+    similarity_percentage = Column(Float, default=100.0)
+    comparison_details = Column(Text, nullable=True)  # JSON-encoded change analysis
+    created_at = Column(DateTime, server_default=func.now())
+
+    original_file = relationship("UploadedFile")
+
 

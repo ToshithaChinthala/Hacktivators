@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models.models import (
-    UploadedFile, FileVerification, PrivacyCredential,
+    UploadedFile, FileVerification,
     SecurityTest, EvidenceRecord, AuditLog
 )
+from app.models.provenance_models import AuditCheckpoint
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -14,7 +15,7 @@ def get_stats(db: Session = Depends(get_db)):
     total_files = db.query(UploadedFile).count()
     verified = db.query(FileVerification).filter(FileVerification.verification_status == "MATCH").count()
     modified = db.query(FileVerification).filter(FileVerification.verification_status == "MISMATCH").count()
-    privacy_v = db.query(PrivacyCredential).count()
+    checkpoints_count = db.query(AuditCheckpoint).count()
     sec_tests = db.query(SecurityTest).count()
     high_risk = db.query(SecurityTest).filter(
         SecurityTest.risk_level.in_(["HIGH", "CRITICAL"])
@@ -34,7 +35,8 @@ def get_stats(db: Session = Depends(get_db)):
         "total_files": total_files,
         "verified_files": verified,
         "modified_files": modified,
-        "privacy_verifications": privacy_v,
+        "checkpoints_count": checkpoints_count,
+        "privacy_verifications": 0,
         "security_tests": sec_tests,
         "high_risk_count": high_risk,
         "evidence_records": evidence,

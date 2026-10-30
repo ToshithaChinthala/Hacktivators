@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 from app.models.models import (
-    UploadedFile, FileVerification, PrivacyCredential,
+    UploadedFile, FileVerification,
     SecurityTest, EvidenceRecord, AuditLog
 )
+from app.models.provenance_models import AuditCheckpoint, KeyRegistry, SignatureRecord
 from sqlalchemy import func
 import uuid
 
@@ -24,21 +25,18 @@ def generate_trust_report(db: Session) -> dict:
         "integrity_score": integrity_score,
     }
 
-    # ---- PrivyPass stats ----
-    total_priv = db.query(PrivacyCredential).count()
-    eligible = db.query(PrivacyCredential).filter(
-        PrivacyCredential.verification_status == "ELIGIBLE"
-    ).count()
-    denied = db.query(PrivacyCredential).filter(
-        PrivacyCredential.verification_status == "NOT_ELIGIBLE"
-    ).count()
-    privacy_score = round((eligible / total_priv * 100) if total_priv > 0 else 100, 1)
+    # ---- ProvenanceGuard stats ----
+    total_checkpoints = db.query(AuditCheckpoint).count()
+    active_keys = db.query(KeyRegistry).filter(KeyRegistry.status == "ACTIVE").count()
+    total_sigs = db.query(SignatureRecord).count()
+    provenance_score = 100.0 if total_checkpoints > 0 or active_keys > 0 else 90.0
 
-    privypass = {
-        "total_verifications": total_priv,
-        "eligible_count": eligible,
-        "denied_count": denied,
-        "privacy_score": privacy_score,
+    provenanceguard = {
+        "checkpoints_count": total_checkpoints,
+        "active_keys": active_keys,
+        "total_signatures": total_sigs,
+        "protection_status": "Active" if total_checkpoints > 0 else "Ready",
+        "provenance_score": provenance_score,
     }
 
     # ---- TrustTest stats ----
@@ -68,7 +66,7 @@ def generate_trust_report(db: Session) -> dict:
     }
 
     # ---- Overall score ----
-    scores = [integrity_score, privacy_score, security_score, evidence_integrity]
+    scores = [integrity_score, provenance_score, security_score, evidence_integrity]
     available = [s for s in scores if s > 0 or True]
     overall_score = round(sum(scores) / len(scores), 1)
 
@@ -78,7 +76,7 @@ def generate_trust_report(db: Session) -> dict:
     return {
         "report_id": uuid.uuid4().hex[:12].upper(),
         "sourcemark": sourcemark,
-        "privypass": privypass,
+        "provenanceguard": provenanceguard,
         "trusttest": trusttest,
         "evidencelock": evidencelock,
         "overall_score": overall_score,

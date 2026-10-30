@@ -1,23 +1,37 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  LayoutDashboard, Shield, Key, Zap, Lock, FileText, Settings,
-  ChevronLeft, ChevronRight, Activity
+  LayoutDashboard, Shield, Zap, Lock, FileText, Settings,
+  ChevronLeft, ChevronRight, Activity, ShieldCheck, LogOut, User as UserIcon
 } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
+import toast from 'react-hot-toast'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/sourcemark', icon: Shield, label: 'SourceMark' },
-  { to: '/privypass', icon: Key, label: 'PrivyPass' },
   { to: '/trusttest', icon: Zap, label: 'TrustTest AI' },
   { to: '/evidencelock', icon: Lock, label: 'EvidenceLock' },
+  { to: '/provenanceguard', icon: ShieldCheck, label: 'ProvenanceGuard' },
   { to: '/trust-report', icon: FileText, label: 'Trust Report' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      toast.success('Logged out successfully')
+      navigate('/login')
+    } catch {
+      navigate('/login')
+    }
+  }
 
   return (
     <motion.aside
@@ -81,6 +95,54 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* User Section & Logout */}
+      <div className="p-3 border-t border-violet-500/10 space-y-2">
+        {!collapsed ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/5 border border-white/5">
+              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-white truncate" title={user?.email}>
+                  {user?.email || 'User'}
+                </p>
+                <span className={`inline-block text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded ${
+                  user?.role === 'admin'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                }`}>
+                  {user?.role || 'user'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign Out
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="h-8 w-8 rounded-full bg-violet-600/30 text-violet-300 flex items-center justify-center text-xs font-bold"
+              title={`${user?.email || 'User'} (${user?.role || 'user'})`}
+            >
+              {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Collapse toggle */}
       <div className="p-2 border-t border-violet-500/10">
         <button
@@ -93,4 +155,3 @@ export default function Sidebar() {
     </motion.aside>
   )
 }
-

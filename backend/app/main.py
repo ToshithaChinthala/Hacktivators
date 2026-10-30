@@ -5,7 +5,7 @@ import logging
 
 from app.database import init_db
 from app.services.websocket_manager import ws_manager
-from app.routes import dashboard, sourcemark, privypass, trusttest, evidencelock, reports
+from app.routes import dashboard, sourcemark, trusttest, evidencelock, reports, provenanceguard, auth
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -27,19 +27,20 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Routers
+app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(sourcemark.router)
-app.include_router(privypass.router)
 app.include_router(trusttest.router)
 app.include_router(evidencelock.router)
 app.include_router(reports.router)
+app.include_router(provenanceguard.router)
 
 @app.get("/api/health")
 def health():
@@ -56,7 +57,7 @@ def health():
         "database": db_status,
         "modules": {
             "sourcemark": "active",
-            "privypass": "active",
+            "provenanceguard": "active",
             "trusttest": "active",
             "evidencelock": "active",
         },

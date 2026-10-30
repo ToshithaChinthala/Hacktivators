@@ -5,9 +5,9 @@ import { useWs } from '../../context/WsContext'
 const titles = {
   '/dashboard': { title: 'Dashboard', sub: 'Platform overview and live metrics' },
   '/sourcemark': { title: 'SourceMark', sub: 'Content integrity verification' },
-  '/privypass': { title: 'PrivyPass', sub: 'Selective-disclosure credential verification' },
   '/trusttest': { title: 'TrustTest AI', sub: 'AI prompt security testing' },
   '/evidencelock': { title: 'EvidenceLock', sub: 'Tamper-evident digital evidence' },
+  '/provenanceguard': { title: 'ProvenanceGuard', sub: 'Rollback protection, re-save detection, key lifecycle' },
   '/trust-report': { title: 'Trust Report', sub: 'Unified platform trust assessment' },
   '/settings': { title: 'Settings', sub: 'Platform configuration' },
 }

@@ -1,14 +1,20 @@
 import os
+import io
+import json
 import shutil
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models.models import UploadedFile, FileVerification
+from app.models.models import UploadedFile, FileVerification, FileComparison
 from app.services.hashing_service import sha256_bytes
 from app.services.audit_service import create_audit_event
 from app.services.websocket_manager import ws_manager
+from app.services.comparison.comparison_service import perform_file_comparison
+from app.services.comparison.report_generator import generate_sourcemark_pdf_report
 from app.core.config import settings
 import asyncio
 
@@ -114,6 +120,7 @@ async def upload_file(
 @router.post("/verify")
 async def verify_file(
     file: UploadFile = File(...),
+    original_file_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
     if not file or not file.filename:
@@ -123,32 +130,60 @@ async def verify_file(
     content = await file.read()
     submitted_hash = sha256_bytes(content)
 
-    # 1. Exact match by hash across all registered files
-    match = db.query(UploadedFile).filter(
-        func.lower(func.trim(UploadedFile.original_hash)) == submitted_hash
-    ).first()
+    matched_file = None
 
-    if match:
-        status = "MATCH"
-        message = f"Integrity verified. File matches registered record '{match.filename}'."
-        matched_file_id = match.id
-        registered_hash = match.original_hash.strip().lower()
-    else:
-        # 2. Check if a registered file exists with the same filename (detecting modification)
-        match_by_name = db.query(UploadedFile).filter(
+    # Priority 1: User explicitly specified an original file to compare against
+    if original_file_id:
+        matched_file = db.query(UploadedFile).filter(UploadedFile.id == original_file_id).first()
+
+    # Priority 2: Exact match by hash across all registered files
+    if not matched_file:
+        matched_file = db.query(UploadedFile).filter(
+            func.lower(func.trim(UploadedFile.original_hash)) == submitted_hash
+        ).first()
+
+    # Priority 3: Check if a registered file exists with the same filename (detecting modification)
+    if not matched_file:
+        matched_file = db.query(UploadedFile).filter(
             UploadedFile.filename == file.filename
         ).order_by(UploadedFile.id.desc()).first()
 
-        if match_by_name:
-            status = "MISMATCH"
-            message = f"File modification detected. Submitted file '{file.filename}' does not match registered fingerprint."
-            matched_file_id = match_by_name.id
-            registered_hash = match_by_name.original_hash.strip().lower()
+    if matched_file:
+        registered_hash = matched_file.original_hash.strip().lower()
+        is_match = (registered_hash == submitted_hash)
+        matched_file_id = matched_file.id
+
+        if is_match:
+            status = "MATCH"
+            message = f"Integrity verified. File matches registered record '{matched_file.filename}'."
         else:
             status = "MISMATCH"
-            message = "No matching fingerprint or registered file found. File may be modified or unregistered."
-            matched_file_id = None
-            registered_hash = None
+            message = f"File modification detected. Submitted file '{file.filename}' does not match registered fingerprint."
+
+        # Read original bytes from storage path for detailed comparison
+        orig_bytes = b""
+        if matched_file.storage_path and os.path.exists(matched_file.storage_path):
+            try:
+                with open(matched_file.storage_path, "rb") as f:
+                    orig_bytes = f.read()
+            except Exception as e:
+                logger.error(f"Failed to read original file from disk: {e}")
+
+        comp_data = perform_file_comparison(
+            orig_bytes=orig_bytes,
+            up_bytes=content,
+            orig_name=matched_file.filename,
+            up_name=file.filename,
+            orig_hash=registered_hash,
+            up_hash=submitted_hash,
+            is_hash_match=is_match,
+        )
+    else:
+        status = "MISMATCH"
+        message = "No matching fingerprint or registered file found. File may be modified or unregistered."
+        matched_file_id = None
+        registered_hash = None
+        comp_data = None
 
     verification = FileVerification(
         file_id=matched_file_id,
@@ -165,6 +200,37 @@ async def verify_file(
         db.rollback()
         logger.error(f"Database commit error in verify_file: {e}")
         raise HTTPException(500, f"Database commit failed: {str(e)}")
+
+    # Store FileComparison record if comparison was performed
+    if comp_data:
+        try:
+            file_comp = FileComparison(
+                comparison_id=comp_data["comparison_id"],
+                original_file_id=matched_file_id,
+                original_hash=registered_hash or "",
+                uploaded_hash=submitted_hash,
+                hash_match_status=status,
+                file_type=comp_data.get("file_type", "unknown"),
+                comparison_method=comp_data.get("comparison_method", "Standard Hash Comparison"),
+                change_percentage=comp_data.get("change_percentage", 0.0),
+                similarity_percentage=comp_data.get("similarity_percentage", 100.0),
+                comparison_details=json.dumps(comp_data),
+            )
+            db.add(file_comp)
+            db.commit()
+            db.refresh(file_comp)
+
+            # Audit event for file comparison
+            create_audit_event(
+                db,
+                "FILE_COMPARISON_PERFORMED",
+                "file_comparison",
+                file_comp.id,
+                "system"
+            )
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save file comparison record: {e}")
 
     try:
         create_audit_event(
@@ -190,7 +256,52 @@ async def verify_file(
         "original_hash": registered_hash,
         "verification_message": message,
         "verified_at": verification.verified_at.isoformat() if verification.verified_at else None,
+        "comparison": comp_data,
     }
+
+
+@router.get("/report/{comparison_id}/download")
+def download_comparison_report(
+    comparison_id: str,
+    db: Session = Depends(get_db),
+):
+    comp = db.query(FileComparison).filter(FileComparison.comparison_id == comparison_id).first()
+    if not comp:
+        raise HTTPException(404, f"Comparison report '{comparison_id}' not found.")
+
+    if comp.comparison_details:
+        try:
+            comp_data = json.loads(comp.comparison_details)
+        except Exception:
+            comp_data = {
+                "comparison_id": comp.comparison_id,
+                "verification_status": comp.hash_match_status,
+                "change_percentage": comp.change_percentage,
+                "similarity_percentage": comp.similarity_percentage,
+                "summary": f"Report for comparison {comp.comparison_id}",
+            }
+    else:
+        comp_data = {
+            "comparison_id": comp.comparison_id,
+            "verification_status": comp.hash_match_status,
+            "change_percentage": comp.change_percentage,
+            "similarity_percentage": comp.similarity_percentage,
+            "summary": f"Report for comparison {comp.comparison_id}",
+        }
+
+    try:
+        pdf_bytes = generate_sourcemark_pdf_report(comp_data)
+    except Exception as e:
+        logger.error(f"PDF report generation error: {e}")
+        raise HTTPException(500, f"Failed to generate PDF report: {str(e)}")
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="SourceMark_Report_{comparison_id}.pdf"'
+        }
+    )
 
 
 @router.get("/files")

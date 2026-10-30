@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, Download, RefreshCw, Shield, Key, Zap, Lock, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react'
+import { FileText, Download, RefreshCw, Shield, ShieldCheck, Zap, Lock, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react'
 import { reportsApi } from '../api/endpoints'
 import StatusBadge from '../components/ui/StatusBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
@@ -113,13 +113,13 @@ export default function TrustReportPage() {
               ]}
             />
             <ModuleCard
-              icon={Key} name="PrivyPass" color="blue"
-              data={report.privypass}
+              icon={ShieldCheck} name="ProvenanceGuard" color="blue"
+              data={report.provenanceguard}
               fields={[
-                { label: 'Total Verifications', key: 'total_verifications' },
-                { label: 'Eligible', key: 'eligible_count' },
-                { label: 'Denied', key: 'denied_count' },
-                { label: 'Privacy Score', key: 'privacy_score', suffix: '%' },
+                { label: 'Checkpoints', key: 'checkpoints_count' },
+                { label: 'Active Keys', key: 'active_keys' },
+                { label: 'Signatures', key: 'total_signatures' },
+                { label: 'Protection Status', key: 'protection_status' },
               ]}
             />
             <ModuleCard

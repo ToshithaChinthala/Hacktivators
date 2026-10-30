@@ -14,12 +14,36 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Do NOT show toasts here — each page handles its own error toasting
-// for user-initiated actions only.
+// Attach Bearer token from localStorage to every outgoing request
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// Handle 401 Unauthorized globally (session expired or invalid token)
 api.interceptors.response.use(
   (res) => res,
-  (err) => Promise.reject(err)
+  (err) => {
+    if (err.response && err.response.status === 401) {
+      const isAuthEndpoint =
+        err.config?.url?.includes('/api/auth/login') ||
+        err.config?.url?.includes('/api/auth/register')
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
+    }
+    return Promise.reject(err)
+  }
 )
 
 export default api
-

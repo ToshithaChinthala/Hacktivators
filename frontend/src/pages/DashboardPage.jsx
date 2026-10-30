@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Files, CheckCircle, AlertTriangle, Key, Zap, Shield, Lock, Activity,
+  Files, CheckCircle, AlertTriangle, ShieldCheck, Zap, Shield, Lock, Activity,
   TrendingUp, Clock, RefreshCw
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -16,7 +16,7 @@ const empty = {
   total_files: 0,
   verified_files: 0,
   modified_files: 0,
-  privacy_verifications: 0,
+  checkpoints_count: 0,
   security_tests: 0,
   high_risk_count: 0,
   evidence_records: 0,
@@ -97,7 +97,7 @@ export default function DashboardPage() {
         <StatCard icon={Files} label="Total Files" value={stats.total_files} color="purple" delay={0} />
         <StatCard icon={CheckCircle} label="Verified Files" value={stats.verified_files} color="emerald" delay={0.05} />
         <StatCard icon={AlertTriangle} label="Modified Detected" value={stats.modified_files} color="red" delay={0.1} />
-        <StatCard icon={Key} label="Privacy Verifications" value={stats.privacy_verifications} color="blue" delay={0.15} />
+        <StatCard icon={ShieldCheck} label="Security Checkpoints" value={stats.checkpoints_count ?? 0} color="blue" delay={0.15} />
         <StatCard icon={Zap} label="Security Tests" value={stats.security_tests} color="amber" delay={0.2} />
         <StatCard icon={Shield} label="High Risk Hits" value={stats.high_risk_count} color="red" delay={0.25} />
         <StatCard icon={Lock} label="Evidence Records" value={stats.evidence_records} color="cyan" delay={0.3} />
@@ -175,7 +175,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { name: 'SourceMark', icon: Shield, color: 'text-violet-400', status: 'Active' },
-            { name: 'PrivyPass', icon: Key, color: 'text-blue-400', status: 'Active' },
+            { name: 'ProvenanceGuard', icon: ShieldCheck, color: 'text-blue-400', status: 'Active' },
             { name: 'TrustTest AI', icon: Zap, color: 'text-amber-400', status: 'Active' },
             { name: 'EvidenceLock', icon: Lock, color: 'text-emerald-400', status: 'Active' },
           ].map(({ name, icon: Icon, color, status }) => (

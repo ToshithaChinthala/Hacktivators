@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
-  Shield, Key, Zap, Lock, ArrowRight, CheckCircle,
+  Shield, ShieldCheck, Zap, Lock, ArrowRight, CheckCircle,
   Activity, Database, Globe, ChevronRight
 } from 'lucide-react'
 
@@ -14,9 +14,9 @@ const modules = [
     iconColor: 'text-violet-400',
   },
   {
-    icon: Key,
-    name: 'PrivyPass',
-    desc: 'Selective-disclosure credential verification without exposing raw personal data.',
+    icon: ShieldCheck,
+    name: 'ProvenanceGuard',
+    desc: 'Rollback protection with filesystem witness, slide & image re-save detection, and signing key defense.',
     color: 'from-blue-600/20 to-blue-900/10 border-blue-500/25',
     iconColor: 'text-blue-400',
   },
@@ -201,7 +201,7 @@ export default function LandingPage() {
   "database": "connected",
   "modules": {
     "sourcemark": "active",
-    "privypass": "active",
+    "provenanceguard": "active",
     "trusttest": "active",
     "evidencelock": "active"
   },

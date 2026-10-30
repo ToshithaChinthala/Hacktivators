@@ -77,7 +77,7 @@ export default function SettingsPage() {
         <div className="space-y-2 text-sm">
           {[
             { name: 'SourceMark', desc: 'SHA-256 file fingerprinting and tamper detection', endpoint: '/api/sourcemark' },
-            { name: 'PrivyPass', desc: 'Server-side selective-disclosure credential verification', endpoint: '/api/privypass' },
+            { name: 'ProvenanceGuard', desc: 'Rollback protection, re-save detection, and signing key lifecycle defense', endpoint: '/api/provenanceguard' },
             { name: 'TrustTest AI', desc: 'Rule-based + optional Gemini AI prompt security testing', endpoint: '/api/trusttest' },
             { name: 'EvidenceLock', desc: 'Hash-chained tamper-evident audit log', endpoint: '/api/evidencelock' },
           ].map(({ name, desc, endpoint }) => (

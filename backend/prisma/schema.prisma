@@ -31,7 +31,10 @@ model uploaded_files {
   original_hash String               @db.VarChar(64)
   created_at    DateTime?            @default(dbgenerated("(now())")) @db.DateTime(0)
   verifications file_verifications[]
+  comparisons   file_comparisons[]
   user          users?               @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "uploaded_files_ibfk_1")
+  original_derivatives  provenance_derivatives[] @relation("original")
+  derived_from          provenance_derivatives[] @relation("derivative")
 
   @@index([id], map: "ix_uploaded_files_id")
   @@index([original_hash], map: "ix_uploaded_files_original_hash")
@@ -114,4 +117,99 @@ model trust_reports {
   created_at      DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
 
   @@index([id], map: "ix_trust_reports_id")
+}
+
+model file_comparisons {
+  id                    Int       @id @default(autoincrement())
+  comparison_id         String    @unique(map: "comparison_id") @db.VarChar(64)
+  original_file_id      Int?
+  original_hash         String    @db.VarChar(64)
+  uploaded_hash         String    @db.VarChar(64)
+  hash_match_status     String    @db.VarChar(20)
+  file_type             String    @db.VarChar(50)
+  comparison_method     String    @db.VarChar(100)
+  change_percentage     Float?    @db.Float
+  similarity_percentage Float?    @db.Float
+  comparison_details    String?   @db.Text
+  created_at            DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+
+  original_file         uploaded_files? @relation(fields: [original_file_id], references: [id])
+
+  @@index([id], map: "ix_file_comparisons_id")
+  @@index([comparison_id], map: "ix_file_comparisons_comparison_id")
+  @@index([original_file_id], map: "original_file_id")
+}
+
+model key_registry {
+  id                       Int                  @id @default(autoincrement())
+  key_id                   String               @unique @db.VarChar(64)
+  owner                    String               @db.VarChar(255)
+  algorithm                String               @db.VarChar(50)
+  public_key_pem           String               @db.Text
+  status                   String               @db.VarChar(30)
+  status_reason            String?              @db.Text
+  created_at               DateTime?            @default(dbgenerated("(now())")) @db.DateTime(0)
+  activated_at             DateTime?            @db.DateTime(0)
+  rotated_at               DateTime?            @db.DateTime(0)
+  revoked_at               DateTime?            @db.DateTime(0)
+  compromised_at           DateTime?            @db.DateTime(0)
+  compromise_window_start  DateTime?            @db.DateTime(0)
+  compromise_window_end    DateTime?            @db.DateTime(0)
+  signatures               signature_records[]
+  checkpoints              audit_checkpoints[]
+
+  @@index([id])
+  @@index([key_id])
+}
+
+model signature_records {
+  id                  Int           @id @default(autoincrement())
+  signature_id        String        @unique @db.VarChar(64)
+  key_id              String        @db.VarChar(64)
+  message_hash        String        @db.VarChar(64)
+  signature_b64       String        @db.Text
+  entity_type         String?       @db.VarChar(100)
+  entity_id           Int?
+  actor               String?       @db.VarChar(255)
+  signed_at           DateTime?     @default(dbgenerated("(now())")) @db.DateTime(0)
+  verification_status String?       @db.VarChar(50)
+  key                 key_registry  @relation(fields: [key_id], references: [key_id])
+
+  @@index([id])
+  @@index([signature_id])
+  @@index([key_id])
+}
+
+model audit_checkpoints {
+  id                  Int           @id @default(autoincrement())
+  checkpoint_id       String        @unique @db.VarChar(64)
+  sequence_number     Int
+  chain_head_hash     String        @db.VarChar(64)
+  chain_entry_count   Int
+  signed_payload      String        @db.Text
+  signing_payload_json String?      @db.Text
+  public_key_id       String?       @db.VarChar(64)
+  created_at          DateTime?     @default(dbgenerated("(now())")) @db.DateTime(0)
+  key                 key_registry? @relation(fields: [public_key_id], references: [key_id])
+
+  @@index([id])
+  @@index([checkpoint_id])
+}
+
+model provenance_derivatives {
+  id                    Int             @id @default(autoincrement())
+  original_file_id      Int
+  derivative_file_id    Int?
+  relationship_type     String          @db.VarChar(50)
+  similarity_percentage Float?          @db.Float
+  comparison_method     String?         @db.VarChar(100)
+  classification        String?         @db.VarChar(50)
+  authorized_by         String?         @db.VarChar(255)
+  notes                 String?         @db.Text
+  created_at            DateTime?       @default(dbgenerated("(now())")) @db.DateTime(0)
+  original_file         uploaded_files  @relation("original", fields: [original_file_id], references: [id])
+  derivative_file       uploaded_files? @relation("derivative", fields: [derivative_file_id], references: [id])
+
+  @@index([id])
+  @@index([original_file_id])
 }

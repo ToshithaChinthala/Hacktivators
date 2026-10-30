@@ -34,10 +34,10 @@ def download_pdf(db: Session = Depends(get_db)):
     pdf.ln(4)
 
     sections = [
-        ("SourceMark — Content Integrity", report.get("sourcemark", {})),
-        ("PrivyPass — Privacy Verification", report.get("privypass", {})),
-        ("TrustTest AI — Security Testing", report.get("trusttest", {})),
-        ("EvidenceLock — Audit Chain", report.get("evidencelock", {})),
+        ("SourceMark - Content Integrity", report.get("sourcemark", {})),
+        ("ProvenanceGuard - Rollback & Provenance Security", report.get("provenanceguard", {})),
+        ("TrustTest AI - Security Testing", report.get("trusttest", {})),
+        ("EvidenceLock - Audit Chain", report.get("evidencelock", {})),
     ]
 
     for title, data in sections:
