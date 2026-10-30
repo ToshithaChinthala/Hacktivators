@@ -1,0 +1,29 @@
+/* App-level styles — main styling is via Tailwind in index.css */
+
+/* Select dark styling */
+select option {
+  background: #0d1224;
+  color: #f1f5f9;
+}
+
+/* Input base style (used inline via className) */
+.input-base {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.input-base:focus {
+  border-color: rgba(124,58,237,0.5);
+}
+
+.input-base option {
+  background: #0d1224;
+  color: #f1f5f9;
+}

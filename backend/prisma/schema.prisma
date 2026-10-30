@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id                  Int                   @id @default(autoincrement())
+  name                String                @db.VarChar(120)
+  email               String                @unique(map: "ix_users_email") @db.VarChar(255)
+  password_hash       String?               @db.VarChar(255)
+  role                String?               @db.VarChar(50)
+  created_at          DateTime?             @default(dbgenerated("(now())")) @db.DateTime(0)
+  privacy_credentials privacy_credentials[]
+  security_tests      security_tests[]
+  uploaded_files      uploaded_files[]
+
+  @@index([id], map: "ix_users_id")
+}
+
+model uploaded_files {
+  id            Int                  @id @default(autoincrement())
+  user_id       Int?
+  filename      String               @db.VarChar(255)
+  file_type     String?              @db.VarChar(100)
+  file_size     BigInt?
+  storage_path  String?              @db.VarChar(500)
+  original_hash String               @db.VarChar(64)
+  created_at    DateTime?            @default(dbgenerated("(now())")) @db.DateTime(0)
+  verifications file_verifications[]
+  user          users?               @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "uploaded_files_ibfk_1")
+
+  @@index([id], map: "ix_uploaded_files_id")
+  @@index([original_hash], map: "ix_uploaded_files_original_hash")
+  @@index([user_id], map: "user_id")
+}
+
+model file_verifications {
+  id                   Int             @id @default(autoincrement())
+  file_id              Int?
+  submitted_hash       String          @db.VarChar(64)
+  verification_status  String          @db.VarChar(20)
+  verification_message String?         @db.Text
+  verified_at          DateTime?       @default(dbgenerated("(now())")) @db.DateTime(0)
+  file                 uploaded_files? @relation(fields: [file_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "file_verifications_ibfk_1")
+
+  @@index([file_id], map: "file_id")
+  @@index([id], map: "ix_file_verifications_id")
+}
+
+model privacy_credentials {
+  id                  Int       @id @default(autoincrement())
+  user_id             Int?
+  credential_type     String    @db.VarChar(100)
+  issuer              String?   @db.VarChar(255)
+  verification_status String    @db.VarChar(30)
+  created_at          DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+  user                users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "privacy_credentials_ibfk_1")
+
+  @@index([id], map: "ix_privacy_credentials_id")
+  @@index([user_id], map: "user_id")
+}
+
+model security_tests {
+  id                   Int       @id @default(autoincrement())
+  user_id              Int?
+  input_prompt         String    @db.Text
+  detected_attack_type String?   @db.VarChar(100)
+  risk_level           String    @db.VarChar(20)
+  risk_score           Float?    @db.Float
+  analysis             String?   @db.Text
+  recommendation       String?   @db.Text
+  created_at           DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+  user                 users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "security_tests_ibfk_1")
+
+  @@index([id], map: "ix_security_tests_id")
+  @@index([user_id], map: "user_id")
+}
+
+model evidence_records {
+  id            Int       @id @default(autoincrement())
+  evidence_name String    @db.VarChar(255)
+  evidence_type String?   @db.VarChar(100)
+  evidence_hash String    @db.VarChar(64)
+  uploaded_by   String?   @db.VarChar(255)
+  created_at    DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+
+  @@index([id], map: "ix_evidence_records_id")
+}
+
+model audit_logs {
+  id            Int       @id @default(autoincrement())
+  action        String    @db.VarChar(100)
+  entity_type   String?   @db.VarChar(100)
+  entity_id     Int?
+  actor         String?   @db.VarChar(255)
+  previous_hash String?   @db.VarChar(64)
+  current_hash  String    @db.VarChar(64)
+  timestamp     DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+
+  @@index([id], map: "ix_audit_logs_id")
+}
+
+model trust_reports {
+  id              Int       @id @default(autoincrement())
+  report_id       String    @unique(map: "report_id") @db.VarChar(64)
+  integrity_score Float?    @db.Float
+  privacy_status  String?   @db.VarChar(50)
+  security_score  Float?    @db.Float
+  overall_status  String?   @db.VarChar(100)
+  created_at      DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+
+  @@index([id], map: "ix_trust_reports_id")
+}
