@@ -9,6 +9,11 @@ import sys
 import time
 
 BASE = "http://127.0.0.1:8000"
+
+session = requests.Session()
+_login = session.post("http://127.0.0.1:8000/api/auth/login", json={"email": "demo@trustsphere.ai", "password": "demo123"})
+if _login.status_code == 200:
+    session.headers.update({"Authorization": "Bearer " + _login.json()["access_token"]})
 PASS = []
 FAIL = []
 
@@ -26,7 +31,7 @@ def section(title):
     print(f"{'='*60}")
 
 def register_file(name, content):
-    r = requests.post(
+    r = session.post(
         f"{BASE}/api/sourcemark/upload",
         files={"file": (name, io.BytesIO(content), "text/plain")},
     )
@@ -36,7 +41,7 @@ def register_file(name, content):
     return None
 
 def generate_key(actor="test-suite"):
-    r = requests.post(f"{BASE}/api/provenanceguard/keys/generate", json={"actor": actor})
+    r = session.post(f"{BASE}/api/provenanceguard/keys/generate", json={"actor": actor})
     if r.status_code == 200:
         # response: { "key": { "key_id": "...", "status": "..." }, "message": "..." }
         data = r.json()
@@ -56,7 +61,7 @@ else:
     fail("Key generation", "No key_id returned")
 
 print("\n[A2] Create checkpoint...")
-r = requests.post(f"{BASE}/api/provenanceguard/checkpoints/create", json={"actor": "test-suite"})
+r = session.post(f"{BASE}/api/provenanceguard/checkpoints/create", json={"actor": "test-suite"})
 if r.status_code == 200:
     cp = r.json()
     checkpoint_id = cp.get("checkpoint_id")
@@ -66,7 +71,7 @@ else:
     checkpoint_id = None
 
 print("\n[A3] Verify checkpoint (expect INTACT)...")
-r = requests.get(f"{BASE}/api/provenanceguard/checkpoints/verify")
+r = session.get(f"{BASE}/api/provenanceguard/checkpoints/verify")
 if r.status_code == 200:
     data = r.json()
     status = data.get("status", "")
@@ -78,7 +83,7 @@ else:
     fail("Checkpoint verify", f"{r.status_code} {r.text[:200]}")
 
 print("\n[A4] List checkpoints...")
-r = requests.get(f"{BASE}/api/provenanceguard/checkpoints")
+r = session.get(f"{BASE}/api/provenanceguard/checkpoints")
 if r.status_code == 200:
     data = r.json()
     count = len(data) if isinstance(data, list) else data.get("count", "?")
@@ -103,7 +108,7 @@ else:
 
 if file_id:
     print("\n[B2] Analyze identical file (expect EXACT_MATCH)...")
-    r = requests.post(
+    r = session.post(
         f"{BASE}/api/provenanceguard/analyze-resave",
         data={"original_file_id": file_id},
         files={"file": ("pg_test_original.txt", io.BytesIO(original_content), "text/plain")},
@@ -121,7 +126,7 @@ if file_id:
 if file_id:
     print("\n[B3] Analyze modified file (expect NOT EXACT_MATCH)...")
     modified_content = b"ProvenanceGuard test file - MODIFIED CONTENT. Extra stuff added. End."
-    r = requests.post(
+    r = session.post(
         f"{BASE}/api/provenanceguard/analyze-resave",
         data={"original_file_id": file_id},
         files={"file": ("pg_test_modified.txt", io.BytesIO(modified_content), "text/plain")},
@@ -141,7 +146,7 @@ if file_id:
     # Use timestamp to ensure unique content across runs
     ts = str(int(time.time()))
     deriv_content = f"ProvenanceGuard derivative content - re-saved version - {ts}".encode()
-    r = requests.post(
+    r = session.post(
         f"{BASE}/api/provenanceguard/register-derivative",
         data={"original_file_id": file_id, "relationship": "RESAVED", "notes": "Test derivative"},
         files={"file": ("pg_test_deriv.txt", io.BytesIO(deriv_content), "text/plain")},
@@ -155,7 +160,7 @@ if file_id:
 
 if file_id:
     print("\n[B5] List derivatives for file...")
-    r = requests.get(f"{BASE}/api/provenanceguard/derivatives/{file_id}")
+    r = session.get(f"{BASE}/api/provenanceguard/derivatives/{file_id}")
     if r.status_code == 200:
         data = r.json()
         count = len(data) if isinstance(data, list) else data.get("count") or len(data.get("derivatives", []))
@@ -175,7 +180,7 @@ else:
     fail("Generate key C")
 
 print("\n[C2] List keys...")
-r = requests.get(f"{BASE}/api/provenanceguard/keys")
+r = session.get(f"{BASE}/api/provenanceguard/keys")
 if r.status_code == 200:
     keys = r.json() if isinstance(r.json(), list) else r.json().get("keys", [])
     ok(f"Keys listed: {len(keys)} keys")
@@ -184,7 +189,7 @@ else:
 
 print("\n[C3] Sign a message...")
 msg = "ProvenanceGuard test payload - do not modify"
-r = requests.post(f"{BASE}/api/provenanceguard/keys/sign", json={"message": msg, "actor": "test-suite"})
+r = session.post(f"{BASE}/api/provenanceguard/keys/sign", json={"message": msg, "actor": "test-suite"})
 if r.status_code == 200:
     sdata = r.json()
     sig_id = sdata.get("signature_id")
@@ -195,7 +200,7 @@ else:
 
 if sig_id:
     print("\n[C4] Verify signature (expect VALID)...")
-    r = requests.post(f"{BASE}/api/provenanceguard/keys/verify", json={
+    r = session.post(f"{BASE}/api/provenanceguard/keys/verify", json={
         "signature_id": sig_id,
         "original_message": msg
     })
@@ -212,7 +217,7 @@ if sig_id:
 
 if sig_id:
     print("\n[C5] Verify with tampered message (expect INVALID_SIGNATURE)...")
-    r = requests.post(f"{BASE}/api/provenanceguard/keys/verify", json={
+    r = session.post(f"{BASE}/api/provenanceguard/keys/verify", json={
         "signature_id": sig_id,
         "original_message": "tampered content here"
     })
@@ -228,7 +233,7 @@ if sig_id:
 
 print("\n[C6] Rotate key...")
 if key_id_c:
-    r = requests.post(f"{BASE}/api/provenanceguard/keys/rotate", json={"key_id": key_id_c, "actor": "test-suite"})
+    r = session.post(f"{BASE}/api/provenanceguard/keys/rotate", json={"key_id": key_id_c, "actor": "test-suite"})
     if r.status_code == 200:
         rdata = r.json()
         # API returns: { "new_key": { "key_id": "..." }, "old_key": { "key_id": "..." } }
@@ -243,7 +248,7 @@ else:
     new_key_id = None
 
 print("\n[C7] Sign with new active key after rotation...")
-r = requests.post(f"{BASE}/api/provenanceguard/keys/sign", json={"message": "post-rotation payload", "actor": "test-suite"})
+r = session.post(f"{BASE}/api/provenanceguard/keys/sign", json={"message": "post-rotation payload", "actor": "test-suite"})
 if r.status_code == 200:
     ok(f"Signed post-rotation: {r.json().get('signature_id')}")
 else:
@@ -251,7 +256,7 @@ else:
 
 if new_key_id:
     print("\n[C8] Revoke the rotated-in key...")
-    r = requests.post(f"{BASE}/api/provenanceguard/keys/revoke", json={"key_id": new_key_id, "reason": "test revocation"})
+    r = session.post(f"{BASE}/api/provenanceguard/keys/revoke", json={"key_id": new_key_id, "reason": "test revocation"})
     if r.status_code == 200:
         ok(f"Revoked: {new_key_id}")
     else:
@@ -260,7 +265,7 @@ else:
     fail("Revoke key", "no new_key_id from rotation")
 
 print("\n[C9] Sign after revocation (expect either success with another key or error)...")
-r = requests.post(f"{BASE}/api/provenanceguard/keys/sign", json={"message": "should fail or use other key", "actor": "test-suite"})
+r = session.post(f"{BASE}/api/provenanceguard/keys/sign", json={"message": "should fail or use other key", "actor": "test-suite"})
 if r.status_code != 200:
     ok(f"Sign correctly blocked (no active key): HTTP {r.status_code}")
 else:
@@ -269,7 +274,7 @@ else:
 print("\n[C10] Generate a key then report compromise...")
 kid_comp, _ = generate_key("test-compromise")
 if kid_comp:
-    r2 = requests.post(f"{BASE}/api/provenanceguard/keys/report-compromise", json={
+    r2 = session.post(f"{BASE}/api/provenanceguard/keys/report-compromise", json={
         "key_id": kid_comp,
         "compromised_at": "2026-01-01T00:00:00",
         "reported_by": "test-suite"

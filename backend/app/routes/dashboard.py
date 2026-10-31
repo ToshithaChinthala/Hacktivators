@@ -4,25 +4,40 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models.models import (
     UploadedFile, FileVerification,
-    SecurityTest, EvidenceRecord, AuditLog
+    SecurityTest, EvidenceRecord, AuditLog, User
 )
 from app.models.provenance_models import AuditCheckpoint
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
-    total_files = db.query(UploadedFile).count()
-    verified = db.query(FileVerification).filter(FileVerification.verification_status == "MATCH").count()
-    modified = db.query(FileVerification).filter(FileVerification.verification_status == "MISMATCH").count()
+def get_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    total_files = db.query(UploadedFile).filter(UploadedFile.user_id == current_user.id).count()
+    verified = (
+        db.query(FileVerification)
+        .join(UploadedFile, FileVerification.file_id == UploadedFile.id)
+        .filter(UploadedFile.user_id == current_user.id, FileVerification.verification_status == "MATCH")
+        .count()
+    )
+    modified = (
+        db.query(FileVerification)
+        .join(UploadedFile, FileVerification.file_id == UploadedFile.id)
+        .filter(UploadedFile.user_id == current_user.id, FileVerification.verification_status == "MISMATCH")
+        .count()
+    )
     checkpoints_count = db.query(AuditCheckpoint).count()
-    sec_tests = db.query(SecurityTest).count()
+    sec_tests = db.query(SecurityTest).filter(SecurityTest.user_id == current_user.id).count()
     high_risk = db.query(SecurityTest).filter(
+        SecurityTest.user_id == current_user.id,
         SecurityTest.risk_level.in_(["HIGH", "CRITICAL"])
     ).count()
-    evidence = db.query(EvidenceRecord).count()
+    evidence = db.query(EvidenceRecord).filter(EvidenceRecord.user_id == current_user.id).count()
 
-    # compute trust score
+    # compute user-specific trust score
     scores = []
     if total_files > 0:
         scores.append((verified / total_files) * 100)
@@ -44,8 +59,17 @@ def get_stats(db: Session = Depends(get_db)):
     }
 
 @router.get("/activity")
-def get_activity(db: Session = Depends(get_db)):
-    logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(20).all()
+def get_activity(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.actor == current_user.email)
+        .order_by(AuditLog.timestamp.desc())
+        .limit(20)
+        .all()
+    )
     return [
         {
             "id": l.id,
@@ -58,4 +82,3 @@ def get_activity(db: Session = Depends(get_db)):
         }
         for l in logs
     ]
-

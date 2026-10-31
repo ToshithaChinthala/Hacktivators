@@ -297,3 +297,106 @@ def verify_rollback(db: Session) -> dict:
         **detail,
     }
 
+
+
+# ─── Non-Destructive Rollback Simulation ──────────────────────────────────────
+
+def simulate_rollback_verification(db: Session, roll_back_by: int = 5) -> dict:
+    """
+    Non-destructive simulation of a database rollback attack.
+
+    GUARANTEES:
+    - Never modifies actual MySQL records (no DELETE, UPDATE, DROP, TRUNCATE).
+    - Reads the genuine trusted checkpoint from the existing witness file.
+    - Computes simulated older sequence and count purely in memory.
+    - Compares simulated older state against the genuine witness checkpoint.
+    """
+    witness = get_latest_witness()
+    if not witness:
+        return {
+            "status": "NO_CHECKPOINT",
+            "rollback_detected": False,
+            "is_simulation": True,
+            "message": "No trusted checkpoint found in witness store. Create a checkpoint first to enable simulation.",
+        }
+
+    # Query actual DB state read-only
+    logs = db.query(AuditLog).order_by(AuditLog.id.desc()).all()
+    actual_count = len(logs)
+    actual_max_id = logs[0].id if logs else 0
+
+    cp_seq = witness["sequence_number"]
+    cp_count = witness["chain_entry_count"]
+    cp_head = witness["chain_head_hash"]
+    cp_id = witness["checkpoint_id"]
+    cp_time = witness["created_at"]
+
+    # Calculate simulated older state in memory (representing an attacker restoring a backup older than checkpoint)
+    roll_back_records = max(1, min(roll_back_by, cp_seq - 1 if cp_seq > 1 else 1))
+    simulated_max_id = max(0, cp_seq - roll_back_records)
+    simulated_count = max(0, cp_count - roll_back_records)
+
+    # In-memory lookup of actual older hash if available, or synthetic
+    older_log = db.query(AuditLog).filter(AuditLog.id == simulated_max_id).first() if simulated_max_id > 0 else None
+    simulated_head_hash = older_log.current_hash if older_log else f"simulated_hash_at_seq_{simulated_max_id}"
+
+    detail = {
+        "is_simulation": True,
+        "checkpoint_id": cp_id,
+        "checkpoint_created_at": cp_time,
+        "checkpoint_sequence": cp_seq,
+        "checkpoint_count": cp_count,
+        "checkpoint_head_hash": cp_head,
+        "current_max_id": simulated_max_id,
+        "current_count": simulated_count,
+        "current_head_hash": simulated_head_hash,
+        "actual_db_max_id": actual_max_id,
+        "actual_db_count": actual_count,
+        "witness_signed": witness.get("signed_payload") not in (None, "UNSIGNED"),
+        "simulation_note": "SIMULATION ONLY: No actual database records or checkpoints were modified, deleted, or harmed.",
+    }
+
+    # Run verification logic on simulated state:
+    # Because simulated_max_id < cp_seq, rollback is detected!
+    if simulated_max_id < cp_seq:
+        return {
+            "status": "ROLLBACK_DETECTED",
+            "rollback_detected": True,
+            "severity": "CRITICAL",
+            "message": (
+                f"SIMULATION: Rollback Attack Detected! Simulated database state (highest sequence ID: {simulated_max_id}) "
+                f"is strictly less than the trusted witness checkpoint sequence ({cp_seq}). "
+                f"The independent witness file outside MySQL prevented silent rollback."
+            ),
+            "detection_reason": (
+                f"Simulated highest sequence ({simulated_max_id}) is less than the trusted checkpoint "
+                f"sequence ({cp_seq}) recorded in witness_store.json. The database appears rolled back by "
+                f"{cp_seq - simulated_max_id} events."
+            ),
+            **detail,
+        }
+
+    if simulated_count < cp_count:
+        return {
+            "status": "TRUNCATION_DETECTED",
+            "rollback_detected": True,
+            "severity": "HIGH",
+            "message": (
+                f"SIMULATION: History Truncation Detected! Simulated entry count ({simulated_count}) "
+                f"is less than checkpoint count ({cp_count})."
+            ),
+            "detection_reason": (
+                f"Simulated entry count ({simulated_count}) is less than trusted checkpoint "
+                f"count ({cp_count}) in witness_store.json."
+            ),
+            **detail,
+        }
+
+    return {
+        "status": "INTACT",
+        "rollback_detected": False,
+        "severity": "NONE",
+        "message": "SIMULATION: In-memory state is intact.",
+        "detection_reason": "Simulated state matches or exceeds trusted checkpoint.",
+        **detail,
+    }

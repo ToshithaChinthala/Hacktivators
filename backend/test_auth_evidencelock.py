@@ -121,7 +121,7 @@ def run_tests():
         "password": u1_pass,
         "name": "User One"
     })
-    if code == 400 and "already registered" in str(u1_reg):
+    if code == 400 and ("already exists" in str(u1_reg) or "already registered" in str(u1_reg)):
         code, u1_reg = request("/api/auth/login", method="POST", data={
             "email": u1_email,
             "password": u1_pass
@@ -137,7 +137,7 @@ def run_tests():
         "password": u2_pass,
         "name": "User Two"
     })
-    if code == 400 and "already registered" in str(u2_reg):
+    if code == 400 and ("already exists" in str(u2_reg) or "already registered" in str(u2_reg)):
         code, u2_reg = request("/api/auth/login", method="POST", data={
             "email": u2_email,
             "password": u2_pass
@@ -156,7 +156,7 @@ def run_tests():
         files={"file": ("u1_nda.txt", b"Confidential agreement for User 1.", "text/plain")},
         token=u1_token
     )
-    u1_rec_id = u1_upload.get("record_id")
+    u1_rec_id = u1_upload.get("id") or u1_upload.get("record_id")
     check(7, "User 1 Evidence Registration", code == 200 and bool(u1_rec_id), f"Record #{u1_rec_id}")
 
     # Test 8: User 2 Uploads Evidence
@@ -166,12 +166,12 @@ def run_tests():
         files={"file": ("u2_audit.csv", b"revenue,expense\n50000,20000\n", "text/csv")},
         token=u2_token
     )
-    u2_rec_id = u2_upload.get("record_id")
+    u2_rec_id = u2_upload.get("id") or u2_upload.get("record_id")
     check(8, "User 2 Evidence Registration", code == 200 and bool(u2_rec_id), f"Record #{u2_rec_id}")
 
     # Test 9: Isolation - User 1 does NOT see User 2's or Admin's records
     code, u1_records = request("/api/evidencelock/records", headers={"Authorization": f"Bearer {u1_token}"})
-    u1_rec_ids = [r["id"] for r in u1_records]
+    u1_rec_ids = [r["id"] for r in u1_records] if isinstance(u1_records, list) else []
     check(
         9,
         "User 1 Isolation (Cannot see User 2's records)",
@@ -181,7 +181,7 @@ def run_tests():
 
     # Test 10: Isolation - User 2 does NOT see User 1's records
     code, u2_records = request("/api/evidencelock/records", headers={"Authorization": f"Bearer {u2_token}"})
-    u2_rec_ids = [r["id"] for r in u2_records]
+    u2_rec_ids = [r["id"] for r in u2_records] if isinstance(u2_records, list) else []
     check(
         10,
         "User 2 Isolation (Cannot see User 1's records)",
@@ -194,8 +194,8 @@ def run_tests():
     check(11, "Direct ID Manipulation Protection (Returns 404)", code == 404, f"Status {code}")
 
     # Test 12: IST Timezone verification
-    u1_record_obj = next(r for r in u1_records if r["id"] == u1_rec_id)
-    ist_present = "IST" in str(u1_record_obj.get("created_at", ""))
+    u1_record_obj = next((r for r in u1_records if r["id"] == u1_rec_id), {})
+    ist_present = "IST" in str(u1_record_obj.get("created_at_ist", "")) or "+05:30" in str(u1_record_obj.get("created_at", ""))
     check(12, "IST Timezone in Evidence Record", ist_present, f"created_at={u1_record_obj.get('created_at')}")
 
     # Test 13: Global Hash Chain Integrity
@@ -214,9 +214,9 @@ def run_tests():
     check(14, "Token Revocation on Logout (401 on reused token)", code_after_logout == 401, f"Status after logout: {code_after_logout}")
 
     # Test 15: Module Regressions - SourceMark, ProvenanceGuard, TrustTest
-    code_sm, sm_files = request("/api/sourcemark/files")
-    code_pg, pg_keys = request("/api/provenanceguard/keys")
-    code_tt, tt_hist = request("/api/trusttest/history")
+    code_sm, sm_files = request("/api/sourcemark/files", headers={"Authorization": f"Bearer {admin_token}"})
+    code_pg, pg_keys = request("/api/provenanceguard/keys", headers={"Authorization": f"Bearer {admin_token}"})
+    code_tt, tt_hist = request("/api/trusttest/history", headers={"Authorization": f"Bearer {admin_token}"})
     check(
         15,
         "Module Regressions (SourceMark, ProvenanceGuard, TrustTest)",

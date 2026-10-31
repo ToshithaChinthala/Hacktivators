@@ -9,6 +9,11 @@ from PIL import Image
 
 BASE_URL = "http://127.0.0.1:8000/api/sourcemark"
 
+session = requests.Session()
+_login = session.post("http://127.0.0.1:8000/api/auth/login", json={"email": "demo@trustsphere.ai", "password": "demo123"})
+if _login.status_code == 200:
+    session.headers.update({"Authorization": "Bearer " + _login.json()["access_token"]})
+
 def test_all():
     print("=" * 60)
     print("STARTING SOURCEMARK 2.0 INTEGRATION TEST SUITE")
@@ -25,14 +30,14 @@ def test_all():
     txt_filename = f"policy_doc_{os.urandom(3).hex()}.txt"
 
     # Register original
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (txt_filename, orig_txt.encode("utf-8"), "text/plain")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (txt_filename, orig_txt.encode("utf-8"), "text/plain")})
     assert r.status_code == 200, f"TXT upload failed: {r.text}"
     reg_id = r.json()["id"]
     reg_hash = r.json()["original_hash"]
     print(f"Registered TXT '{txt_filename}' (ID: {reg_id}, Hash: {reg_hash[:16]}...)")
 
     # Verify identical (Scenario 1)
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (txt_filename, orig_txt.encode("utf-8"), "text/plain")})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (txt_filename, orig_txt.encode("utf-8"), "text/plain")})
     assert r.status_code == 200, f"TXT identical verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MATCH"
@@ -41,7 +46,7 @@ def test_all():
     print(f"Scenario 1 PASSED: Identical TXT -> Status: {res['verification_status']}, Change: {res['comparison']['change_percentage']}%, Similarity: {res['comparison']['similarity_percentage']}%")
 
     # Verify modified (Scenario 2)
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (txt_filename, mod_txt.encode("utf-8"), "text/plain")})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (txt_filename, mod_txt.encode("utf-8"), "text/plain")})
     assert r.status_code == 200, f"TXT modified verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -69,12 +74,12 @@ def test_all():
     mod_pdf_bytes = make_pdf(["Confidential Audit Document - Page 1", "Clause A: Strict adherence to hash integrity.", "Clause B: MODIFIED parameter list with elevated privileges."])
 
     # Register PDF
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (pdf_filename, orig_pdf_bytes, "application/pdf")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (pdf_filename, orig_pdf_bytes, "application/pdf")})
     assert r.status_code == 200, f"PDF upload failed: {r.text}"
     print(f"Registered PDF '{pdf_filename}'")
 
     # Verify modified PDF
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (pdf_filename, mod_pdf_bytes, "application/pdf")})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (pdf_filename, mod_pdf_bytes, "application/pdf")})
     assert r.status_code == 200, f"PDF verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -99,12 +104,12 @@ def test_all():
     mod_docx_bytes = make_docx(["Section 1: Architecture Overview", "TrustSphere AI provides high-assurance verification.", "Section 2: New Added Policy Section."])
 
     # Register DOCX
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (docx_filename, orig_docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (docx_filename, orig_docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
     assert r.status_code == 200, f"DOCX upload failed: {r.text}"
     print(f"Registered DOCX '{docx_filename}'")
 
     # Verify modified DOCX
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (docx_filename, mod_docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (docx_filename, mod_docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
     assert r.status_code == 200, f"DOCX verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -132,13 +137,13 @@ def test_all():
     mod_img_bytes = mod_img_buf.getvalue()
 
     # Register Image
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (img_filename, orig_img_bytes, "image/png")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (img_filename, orig_img_bytes, "image/png")})
     assert r.status_code == 200, f"Image upload failed: {r.text}"
     img_reg_id = r.json()["id"]
     print(f"Registered Image '{img_filename}' (ID: {img_reg_id})")
 
     # Verify modified Image
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (img_filename, mod_img_bytes, "image/png")}, data={"original_file_id": img_reg_id})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (img_filename, mod_img_bytes, "image/png")}, data={"original_file_id": img_reg_id})
     assert r.status_code == 200, f"Image verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -163,13 +168,13 @@ def test_all():
     mod_zip_bytes = make_zip({"readme.txt": b"Package v1.0", "data.csv": b"1,2,3", "extra.key": b"secret123"})
 
     # Register ZIP
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (zip_filename, orig_zip_bytes, "application/zip")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (zip_filename, orig_zip_bytes, "application/zip")})
     assert r.status_code == 200, f"ZIP upload failed: {r.text}"
     zip_reg_id = r.json()["id"]
     print(f"Registered ZIP '{zip_filename}' (ID: {zip_reg_id})")
 
     # Verify modified ZIP
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (zip_filename, mod_zip_bytes, "application/zip")}, data={"original_file_id": zip_reg_id})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (zip_filename, mod_zip_bytes, "application/zip")}, data={"original_file_id": zip_reg_id})
     assert r.status_code == 200, f"ZIP verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -185,13 +190,13 @@ def test_all():
     mod_bin = bytes([(b + 5) % 256 if 200 <= idx < 300 else b for idx, b in enumerate(orig_bin)])
 
     # Register Binary
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (bin_filename, orig_bin, "application/octet-stream")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (bin_filename, orig_bin, "application/octet-stream")})
     assert r.status_code == 200, f"Binary upload failed: {r.text}"
     bin_reg_id = r.json()["id"]
     print(f"Registered Binary '{bin_filename}' (ID: {bin_reg_id})")
 
     # Verify modified Binary
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (bin_filename, mod_bin, "application/octet-stream")}, data={"original_file_id": bin_reg_id})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (bin_filename, mod_bin, "application/octet-stream")}, data={"original_file_id": bin_reg_id})
     assert r.status_code == 200, f"Binary verify failed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -206,12 +211,12 @@ def test_all():
     corrupt_bytes = b"%PDF-1.4\nTRUNCATED_AND_INVALID_CONTENT_GARBAGE\x00\xff"
 
     # Register original valid PDF
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (corrupt_filename, orig_pdf_bytes, "application/pdf")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (corrupt_filename, orig_pdf_bytes, "application/pdf")})
     assert r.status_code == 200
     corrupt_reg_id = r.json()["id"]
 
     # Verify with corrupt bytes - should fall back gracefully to binary, not crash with 500
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (corrupt_filename, corrupt_bytes, "application/pdf")}, data={"original_file_id": corrupt_reg_id})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (corrupt_filename, corrupt_bytes, "application/pdf")}, data={"original_file_id": corrupt_reg_id})
     assert r.status_code == 200, f"Corrupt file crashed backend with status {r.status_code}: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -223,11 +228,11 @@ def test_all():
     print("\n--- [Scenario 9] Misleading Extension Handling ---")
     fake_ext_filename = f"image_as_pdf_{os.urandom(3).hex()}.pdf"
     # An image named .pdf
-    r = requests.post(f"{BASE_URL}/upload", files={"file": (fake_ext_filename, orig_img_bytes, "application/pdf")})
+    r = session.post(f"{BASE_URL}/upload", files={"file": (fake_ext_filename, orig_img_bytes, "application/pdf")})
     assert r.status_code == 200
     fake_reg_id = r.json()["id"]
 
-    r = requests.post(f"{BASE_URL}/verify", files={"file": (fake_ext_filename, mod_img_bytes, "application/pdf")}, data={"original_file_id": fake_reg_id})
+    r = session.post(f"{BASE_URL}/verify", files={"file": (fake_ext_filename, mod_img_bytes, "application/pdf")}, data={"original_file_id": fake_reg_id})
     assert r.status_code == 200, f"Misleading extension crashed: {r.text}"
     res = r.json()
     assert res["verification_status"] == "MISMATCH"
@@ -238,7 +243,7 @@ def test_all():
     # -------------------------------------------------------------
     print("\n--- [Scenario 10] PDF Report Generation & Download ---")
     comp_id = res["comparison"]["comparison_id"]
-    r = requests.get(f"{BASE_URL}/report/{comp_id}/download")
+    r = session.get(f"{BASE_URL}/report/{comp_id}/download")
     assert r.status_code == 200, f"Report download failed: {r.text}"
     assert r.headers.get("content-type") == "application/pdf"
     assert r.content.startswith(b"%PDF"), "Downloaded file is not a valid PDF!"

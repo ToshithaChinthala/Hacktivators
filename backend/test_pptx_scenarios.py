@@ -13,6 +13,11 @@ from app.services.comparison.pptx_comparison import compare_pptx, extract_pptx_s
 from app.services.hashing_service import sha256_bytes
 
 BASE = "http://127.0.0.1:8000"
+
+session = requests.Session()
+_login = session.post("http://127.0.0.1:8000/api/auth/login", json={"email": "demo@trustsphere.ai", "password": "demo123"})
+if _login.status_code == 200:
+    session.headers.update({"Authorization": "Bearer " + _login.json()["access_token"]})
 PASS = []
 FAIL = []
 
@@ -249,7 +254,7 @@ else:
 print("\n[Test 7] End-to-End API Test (/api/provenanceguard/analyze-resave)")
 try:
     # 1. Register the original PPTX via SourceMark
-    reg_r = requests.post(
+    reg_r = session.post(
         f"{BASE}/api/sourcemark/upload",
         files={"file": ("AfterHours_SourceMark.pptx", io.BytesIO(orig_bytes), "application/vnd.openxmlformats-officedocument.presentationml.presentation")}
     )
@@ -258,7 +263,7 @@ try:
         print(f"    Registered original PPTX: ID {orig_file_id}")
 
         # 2. Upload the single name changed PPTX to /api/provenanceguard/analyze-resave
-        analysis_r = requests.post(
+        analysis_r = session.post(
             f"{BASE}/api/provenanceguard/analyze-resave",
             data={"original_file_id": orig_file_id},
             files={"file": ("AfterHours_SourceMark_Resaved.pptx", io.BytesIO(changed_bytes), "application/vnd.openxmlformats-officedocument.presentationml.presentation")}

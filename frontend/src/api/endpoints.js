@@ -61,6 +61,7 @@ export const provenanceguardApi = {
     api.post('/api/provenanceguard/checkpoints/create', { actor }),
   listCheckpoints: () => api.get('/api/provenanceguard/checkpoints'),
   verifyRollback: () => api.get('/api/provenanceguard/checkpoints/verify'),
+  simulateRollback: () => api.post('/api/provenanceguard/checkpoints/simulate-rollback'),
   getWitnessStore: () => api.get('/api/provenanceguard/checkpoints/witness'),
 
   // Re-save analysis
@@ -86,5 +87,18 @@ export const provenanceguardApi = {
   signMessage: (payload) => api.post('/api/provenanceguard/keys/sign', payload),
   verifySignature: (payload) => api.post('/api/provenanceguard/keys/verify', payload),
   listSignatures: () => api.get('/api/provenanceguard/signatures'),
+
+  // Independent Reports (Rollback, Re-Save, Signing Keys)
+  generateRollbackReport: (data) => api.post('/api/provenanceguard/reports/rollback', data),
+  downloadRollbackPdf: (data) =>
+    api.post('/api/provenanceguard/reports/rollback/pdf', data, { responseType: 'blob' }),
+
+  generateResaveReport: (data) => api.post('/api/provenanceguard/reports/resave', data),
+  downloadResavePdf: (data) =>
+    api.post('/api/provenanceguard/reports/resave/pdf', data, { responseType: 'blob' }),
+
+  generateKeysReport: (data) => api.post('/api/provenanceguard/reports/keys', data),
+  downloadKeysPdf: (data) =>
+    api.post('/api/provenanceguard/reports/keys/pdf', data, { responseType: 'blob' }),
 }
 

@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models.models import UploadedFile, FileVerification, FileComparison
+from app.models.models import UploadedFile, FileVerification, FileComparison, User
+from app.services.auth_service import get_current_user
 from app.services.hashing_service import sha256_bytes
 from app.services.audit_service import create_audit_event
 from app.services.websocket_manager import ws_manager
@@ -27,7 +28,8 @@ BLOCKED_EXTENSIONS = {".exe", ".bat", ".cmd", ".sh", ".msi", ".dll", ".com", ".s
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    user_id: int = Form(default=1),
+    user_id: Optional[int] = Form(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if not file or not file.filename:
@@ -47,8 +49,9 @@ async def upload_file(
 
     file_hash = sha256_bytes(content)
 
-    # Check for duplicates by hash
+    # Check for duplicates by hash strictly within current user's vault
     existing = db.query(UploadedFile).filter(
+        UploadedFile.user_id == current_user.id,
         func.lower(func.trim(UploadedFile.original_hash)) == file_hash
     ).first()
     if existing:
@@ -74,7 +77,7 @@ async def upload_file(
         raise HTTPException(500, f"Failed to store file on disk: {str(e)}")
 
     record = UploadedFile(
-        user_id=user_id,
+        user_id=current_user.id,
         filename=file.filename,
         file_type=file.content_type or "application/octet-stream",
         file_size=size,
@@ -92,7 +95,7 @@ async def upload_file(
         raise HTTPException(500, f"Database commit failed: {str(e)}")
 
     try:
-        create_audit_event(db, "FILE_REGISTERED", "uploaded_file", record.id, f"user_{user_id}")
+        create_audit_event(db, "FILE_REGISTERED", "uploaded_file", record.id, current_user.email)
     except Exception as e:
         logger.error(f"Audit event creation failed: {e}")
 
@@ -121,6 +124,7 @@ async def upload_file(
 async def verify_file(
     file: UploadFile = File(...),
     original_file_id: Optional[int] = Form(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if not file or not file.filename:
@@ -132,19 +136,26 @@ async def verify_file(
 
     matched_file = None
 
-    # Priority 1: User explicitly specified an original file to compare against
+    # Priority 1: User explicitly specified an original file to compare against (must belong to user)
     if original_file_id:
-        matched_file = db.query(UploadedFile).filter(UploadedFile.id == original_file_id).first()
+        matched_file = db.query(UploadedFile).filter(
+            UploadedFile.id == original_file_id,
+            UploadedFile.user_id == current_user.id
+        ).first()
+        if not matched_file:
+            raise HTTPException(404, f"Registered file ID {original_file_id} not found in your account.")
 
-    # Priority 2: Exact match by hash across all registered files
+    # Priority 2: Exact match by hash across current user's registered files
     if not matched_file:
         matched_file = db.query(UploadedFile).filter(
+            UploadedFile.user_id == current_user.id,
             func.lower(func.trim(UploadedFile.original_hash)) == submitted_hash
         ).first()
 
-    # Priority 3: Check if a registered file exists with the same filename (detecting modification)
+    # Priority 3: Check if a registered file exists with same filename in current user's vault
     if not matched_file:
         matched_file = db.query(UploadedFile).filter(
+            UploadedFile.user_id == current_user.id,
             UploadedFile.filename == file.filename
         ).order_by(UploadedFile.id.desc()).first()
 
@@ -226,7 +237,7 @@ async def verify_file(
                 "FILE_COMPARISON_PERFORMED",
                 "file_comparison",
                 file_comp.id,
-                "system"
+                current_user.email
             )
         except Exception as e:
             db.rollback()
@@ -235,7 +246,7 @@ async def verify_file(
     try:
         create_audit_event(
             db, f"FILE_{status}", "file_verification", verification.id,
-            "system"
+            current_user.email
         )
     except Exception as e:
         logger.error(f"Audit event creation failed: {e}")
@@ -263,10 +274,13 @@ async def verify_file(
 @router.get("/report/{comparison_id}/download")
 def download_comparison_report(
     comparison_id: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     comp = db.query(FileComparison).filter(FileComparison.comparison_id == comparison_id).first()
     if not comp:
+        raise HTTPException(404, f"Comparison report '{comparison_id}' not found.")
+    if comp.original_file and comp.original_file.user_id != current_user.id:
         raise HTTPException(404, f"Comparison report '{comparison_id}' not found.")
 
     if comp.comparison_details:
@@ -305,9 +319,17 @@ def download_comparison_report(
 
 
 @router.get("/files")
-def list_files(db: Session = Depends(get_db)):
+def list_files(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     try:
-        files = db.query(UploadedFile).order_by(UploadedFile.id.desc()).all()
+        files = (
+            db.query(UploadedFile)
+            .filter(UploadedFile.user_id == current_user.id)
+            .order_by(UploadedFile.id.desc())
+            .all()
+        )
         return [
             {
                 "id": f.id,
@@ -325,10 +347,14 @@ def list_files(db: Session = Depends(get_db)):
 
 
 @router.get("/history")
-def get_history(db: Session = Depends(get_db)):
+def get_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     verifications = (
         db.query(FileVerification, UploadedFile)
-        .outerjoin(UploadedFile, FileVerification.file_id == UploadedFile.id)
+        .join(UploadedFile, FileVerification.file_id == UploadedFile.id)
+        .filter(UploadedFile.user_id == current_user.id)
         .order_by(FileVerification.verified_at.desc())
         .limit(50)
         .all()

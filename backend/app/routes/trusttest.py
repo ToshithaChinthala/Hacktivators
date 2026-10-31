@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import SecurityTest
+from app.models.models import SecurityTest, User
+from app.services.auth_service import get_current_user
 from app.services.security_testing_service import analyze_prompt
 from app.services.audit_service import create_audit_event
 from app.services.websocket_manager import ws_manager
@@ -16,7 +17,11 @@ class TestRequest(BaseModel):
     user_id: int = 1
 
 @router.post("/run")
-async def run_test(req: TestRequest, db: Session = Depends(get_db)):
+async def run_test(
+    req: TestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     if not req.input_prompt.strip():
         from fastapi import HTTPException
         raise HTTPException(400, "Prompt cannot be empty")
@@ -33,7 +38,7 @@ async def run_test(req: TestRequest, db: Session = Depends(get_db)):
         result = analyze_prompt(req.input_prompt)
 
     record = SecurityTest(
-        user_id=req.user_id,
+        user_id=current_user.id,
         input_prompt=req.input_prompt,
         detected_attack_type=result["detected_attack_type"],
         risk_level=result["risk_level"],
@@ -45,7 +50,7 @@ async def run_test(req: TestRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(record)
 
-    create_audit_event(db, "SECURITY_TEST_RUN", "security_test", record.id, f"user_{req.user_id}")
+    create_audit_event(db, "SECURITY_TEST_RUN", "security_test", record.id, current_user.email)
     asyncio.create_task(ws_manager.broadcast({
         "module": "trusttest",
         "event": "test_completed",
@@ -78,8 +83,17 @@ async def _gemini_analyze(prompt: str) -> dict | None:
 
 
 @router.get("/history")
-def get_history(db: Session = Depends(get_db)):
-    tests = db.query(SecurityTest).order_by(SecurityTest.created_at.desc()).limit(50).all()
+def get_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    tests = (
+        db.query(SecurityTest)
+        .filter(SecurityTest.user_id == current_user.id)
+        .order_by(SecurityTest.created_at.desc())
+        .limit(50)
+        .all()
+    )
     return [
         {
             "id": t.id,

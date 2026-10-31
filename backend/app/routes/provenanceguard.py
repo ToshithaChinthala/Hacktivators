@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.models.models import UploadedFile, AuditLog
+from app.models.models import UploadedFile, AuditLog, User
+from app.services.auth_service import get_current_user
 from app.models.provenance_models import (
     KeyRegistry, SignatureRecord, AuditCheckpoint, ProvenanceDerivative
 )
@@ -34,10 +35,21 @@ from app.services.signature_service import sign_data, verify_signature
 from app.services.checkpoint_service import (
     create_checkpoint,
     verify_rollback,
+    simulate_rollback_verification,
     get_latest_witness,
     get_all_witnesses,
 )
 from app.services.resave_detection import analyze_resave
+from fastapi.responses import StreamingResponse
+import io
+from app.services.provenance_report_service import (
+    build_rollback_report,
+    build_resave_report,
+    build_keys_report,
+    generate_rollback_pdf,
+    generate_resave_pdf,
+    generate_keys_pdf,
+)
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -106,6 +118,15 @@ def verify_rollback_endpoint(db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/checkpoints/simulate-rollback")
+def simulate_rollback_endpoint(db: Session = Depends(get_db)):
+    """
+    Non-destructively demonstrate rollback attack detection for demonstration.
+    Compares simulated older state against the genuine witness store without altering MySQL.
+    """
+    return simulate_rollback_verification(db)
+
+
 @router.get("/checkpoints/witness")
 def get_witness_store():
     """Return all checkpoints from the independent filesystem witness."""
@@ -127,16 +148,22 @@ def get_witness_store():
 async def analyze_resave_endpoint(
     file: UploadFile = File(...),
     original_file_id: int = Form(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Upload a new version of a file and compare it against the registered original.
     Returns classification (EXACT_MATCH / CONTENT_SIMILAR / POSSIBLE_DERIVATIVE /
     CONTENT_MODIFIED / UNABLE_TO_DETERMINE) with detailed comparison.
+    Enforces strict user ownership: users can only analyze their own registered files.
     """
-    original = db.query(UploadedFile).filter(UploadedFile.id == original_file_id).first()
+    original = (
+        db.query(UploadedFile)
+        .filter(UploadedFile.id == original_file_id, UploadedFile.user_id == current_user.id)
+        .first()
+    )
     if not original:
-        raise HTTPException(404, f"Registered file ID {original_file_id} not found.")
+        raise HTTPException(404, f"Registered file ID {original_file_id} not found in your account.")
 
     if not original.storage_path or not os.path.exists(original.storage_path):
         raise HTTPException(400, "Original file not available on disk for comparison.")
@@ -183,22 +210,28 @@ async def register_derivative(
     file: UploadFile = File(...),
     original_file_id: int = Form(...),
     relationship_type: str = Form(default="UNKNOWN"),
-    authorized_by: str = Form(default="admin"),
+    authorized_by: Optional[str] = Form(None),
     notes: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Register an authorized derivative (resaved/resized/converted) file linked to its original.
     The derivative is stored as a new UploadedFile record with a provenance link.
+    Enforces strict user ownership: users can only register derivatives of their own files.
     """
     # Validate relationship_type
     valid_types = {"RESAVE", "RESIZE", "RECOMPRESS", "FORMAT_CONVERT", "UNKNOWN"}
     if relationship_type not in valid_types:
         raise HTTPException(400, f"relationship_type must be one of {valid_types}")
 
-    original = db.query(UploadedFile).filter(UploadedFile.id == original_file_id).first()
+    original = (
+        db.query(UploadedFile)
+        .filter(UploadedFile.id == original_file_id, UploadedFile.user_id == current_user.id)
+        .first()
+    )
     if not original:
-        raise HTTPException(404, f"Original file ID {original_file_id} not found.")
+        raise HTTPException(404, f"Original file ID {original_file_id} not found in your account.")
 
     await file.seek(0)
     content = await file.read()
@@ -217,7 +250,7 @@ async def register_derivative(
         f2.write(content)
 
     deriv_file = UploadedFile(
-        user_id=original.user_id,
+        user_id=current_user.id,
         filename=file.filename,
         file_type=file.content_type or "application/octet-stream",
         file_size=len(content),
@@ -259,7 +292,7 @@ async def register_derivative(
         similarity_percentage=sim_pct,
         comparison_method=comp_method,
         classification=classification,
-        authorized_by=authorized_by,
+        authorized_by=current_user.email,
         notes=notes,
     )
     db.add(link)
@@ -284,11 +317,19 @@ async def register_derivative(
 
 
 @router.get("/derivatives/{file_id}")
-def get_derivatives(file_id: int, db: Session = Depends(get_db)):
-    """Return all registered derivatives of a given original file."""
-    original = db.query(UploadedFile).filter(UploadedFile.id == file_id).first()
+def get_derivatives(
+    file_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return all registered derivatives of a given original file belonging to the user."""
+    original = (
+        db.query(UploadedFile)
+        .filter(UploadedFile.id == file_id, UploadedFile.user_id == current_user.id)
+        .first()
+    )
     if not original:
-        raise HTTPException(404, f"File ID {file_id} not found.")
+        raise HTTPException(404, f"File ID {file_id} not found in your account.")
 
     derivs = (
         db.query(ProvenanceDerivative)
@@ -552,3 +593,83 @@ def _key_to_dict(k: KeyRegistry) -> dict:
         "private_key": "[stored securely on server filesystem — never exposed via API]",
     }
 
+
+
+# ══════════════════════════════════════════════════════
+# PROVENANCEGUARD INDEPENDENT REPORTS (ROLLBACK, RESAVE, KEYS)
+# ══════════════════════════════════════════════════════
+
+@router.post("/reports/rollback")
+def preview_rollback_report(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate structured preview of Rollback Detection Report."""
+    return build_rollback_report(payload, current_user)
+
+
+@router.post("/reports/rollback/pdf")
+def download_rollback_report_pdf(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Download Rollback Detection Report as PDF."""
+    report_data = build_rollback_report(payload, current_user)
+    pdf_bytes = generate_rollback_pdf(report_data)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Rollback_Report_{report_data["report_id"]}.pdf"'},
+    )
+
+
+@router.post("/reports/resave")
+def preview_resave_report(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate structured preview of Re-Save Analysis Report."""
+    return build_resave_report(payload, current_user, db)
+
+
+@router.post("/reports/resave/pdf")
+def download_resave_report_pdf(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download Re-Save Analysis Report as PDF."""
+    report_data = build_resave_report(payload, current_user, db)
+    pdf_bytes = generate_resave_pdf(report_data)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="ReSave_Report_{report_data["report_id"]}.pdf"'},
+    )
+
+
+@router.post("/reports/keys")
+def preview_keys_report(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate structured preview of Signing Key Security Report."""
+    return build_keys_report(payload, current_user, db)
+
+
+@router.post("/reports/keys/pdf")
+def download_keys_report_pdf(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download Signing Key Security Report as PDF."""
+    report_data = build_keys_report(payload, current_user, db)
+    pdf_bytes = generate_keys_pdf(report_data)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="SigningKey_Report_{report_data["report_id"]}.pdf"'},
+    )

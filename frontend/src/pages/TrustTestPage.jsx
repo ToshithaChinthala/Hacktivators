@@ -16,10 +16,10 @@ const examplePrompts = [
 ]
 
 const riskColors = {
-  LOW: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',
-  MEDIUM: 'text-amber-400 border-amber-500/30 bg-amber-500/5',
-  HIGH: 'text-orange-400 border-orange-500/30 bg-orange-500/5',
-  CRITICAL: 'text-red-400 border-red-500/30 bg-red-500/5',
+  LOW: 'text-emerald-800 border-emerald-200 bg-emerald-50/60',
+  MEDIUM: 'text-amber-800 border-amber-200 bg-amber-50/60',
+  HIGH: 'text-orange-800 border-orange-200 bg-orange-50/60',
+  CRITICAL: 'text-rose-800 border-rose-200 bg-rose-50/60',
 }
 
 export default function TrustTestPage() {
@@ -56,22 +56,28 @@ export default function TrustTestPage() {
   return (
     <div className="space-y-6">
       {/* Info */}
-      <div className="glass rounded-xl p-4 border border-amber-500/20 bg-amber-500/5 flex gap-3">
-        <Info className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
-        <p className="text-slate-300 text-sm leading-relaxed">
-          <span className="font-semibold text-amber-400">Heuristic Detection:</span> TrustTest AI uses
+      <div className="rounded-xl p-4 border border-amber-200 bg-amber-50/60 flex gap-3 text-xs shadow-2xs">
+        <Info className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <p className="text-slate-700 leading-relaxed">
+          <span className="font-semibold text-amber-900">Heuristic Detection:</span> TrustTest AI uses
           rule-based pattern matching to classify prompt-injection risk. Results are indicative, not exhaustive.
           Gemini integration is optional; the system works locally without an API key.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 glass rounded-xl border border-violet-500/15 w-fit">
+      <div className="flex gap-1 p-1 bg-white rounded-xl border border-slate-200/80 shadow-2xs w-fit">
         {[
           { id: 'test', label: 'Run Test', icon: Zap },
           { id: 'history', label: 'History', icon: Clock },
         ].map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === id ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              tab === id ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
             <Icon className="h-4 w-4" />
             {label}
           </button>
@@ -82,9 +88,9 @@ export default function TrustTestPage() {
         {tab === 'test' && (
           <motion.div key="test" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid lg:grid-cols-2 gap-5">
             {/* Input */}
-            <div className="glass rounded-xl p-6 border border-violet-500/15 space-y-4">
-              <h3 className="text-white font-semibold flex items-center gap-2">
-                <Zap className="h-4 w-4 text-amber-400" />
+            <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+              <h3 className="text-slate-900 font-semibold flex items-center gap-2 text-sm">
+                <Zap className="h-4 w-4 text-amber-600" />
                 Test Prompt
               </h3>
               <textarea
@@ -92,19 +98,27 @@ export default function TrustTestPage() {
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={6}
                 placeholder="Enter any text or prompt to test for security risks…"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-violet-500/50 transition-colors resize-none font-mono"
+                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 placeholder-slate-400 text-sm focus:bg-white focus:outline-none focus:border-indigo-500 transition-colors resize-none font-mono"
               />
               <div>
-                <p className="text-slate-500 text-xs mb-2">Quick examples:</p>
+                <p className="text-slate-500 text-xs mb-2 font-medium">Quick examples:</p>
                 <div className="flex flex-wrap gap-2">
                   {examplePrompts.map((p) => (
-                    <button key={p} onClick={() => setPrompt(p)} className="text-xs px-2.5 py-1 rounded-lg glass border border-white/10 text-slate-400 hover:text-slate-200 hover:border-violet-500/30 transition-colors text-left truncate max-w-[200px]">
+                    <button
+                      key={p}
+                      onClick={() => setPrompt(p)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-indigo-400 transition-colors text-left truncate max-w-[200px] shadow-2xs"
+                    >
                       {p.substring(0, 30)}…
                     </button>
                   ))}
                 </div>
               </div>
-              <button onClick={handleRun} disabled={loading || !prompt.trim()} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+              <button
+                onClick={handleRun}
+                disabled={loading || !prompt.trim()}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm transition-colors disabled:opacity-50 shadow-xs"
+              >
                 {loading ? 'Analyzing…' : <><Send className="h-4 w-4" /> Run Security Test</>}
               </button>
             </div>
@@ -112,14 +126,14 @@ export default function TrustTestPage() {
             {/* Result */}
             <div>
               {loading && (
-                <div className="glass rounded-xl p-10 border border-violet-500/15 flex items-center justify-center">
+                <div className="bg-white rounded-xl p-10 border border-slate-200/80 shadow-xs flex items-center justify-center">
                   <LoadingSpinner text="Analyzing prompt…" />
                 </div>
               )}
               {result && !loading && <TestResult result={result} />}
               {!result && !loading && (
-                <div className="glass rounded-xl p-10 border border-violet-500/15 flex flex-col items-center justify-center gap-3 text-slate-500">
-                  <ShieldCheck className="h-8 w-8 opacity-30" />
+                <div className="bg-white rounded-xl p-10 border border-slate-200/80 shadow-xs flex flex-col items-center justify-center gap-3 text-slate-400">
+                  <ShieldCheck className="h-8 w-8 opacity-30 text-slate-400" />
                   <p className="text-sm">Submit a prompt to see the risk analysis</p>
                 </div>
               )}
@@ -129,24 +143,24 @@ export default function TrustTestPage() {
 
         {tab === 'history' && (
           <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <div className="glass rounded-xl border border-violet-500/15 overflow-hidden">
-              <div className="px-5 py-4 border-b border-violet-500/10">
-                <h3 className="text-white font-semibold text-sm">Test History</h3>
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h3 className="text-slate-900 font-semibold text-sm">Test History</h3>
               </div>
               {history.length === 0 ? (
-                <div className="py-10 text-center text-slate-500 text-sm">No tests run yet.</div>
+                <div className="py-10 text-center text-slate-400 text-sm">No tests run yet.</div>
               ) : (
-                <div className="divide-y divide-white/5">
+                <div className="divide-y divide-slate-100">
                   {history.map((h) => (
-                    <div key={h.id} className="px-5 py-3">
+                    <div key={h.id} className="px-5 py-3.5 hover:bg-slate-50/70 transition-colors">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-white text-sm font-medium truncate max-w-sm">{h.input_prompt}</span>
+                        <span className="text-slate-900 text-sm font-medium truncate max-w-sm">{h.input_prompt}</span>
                         <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                           <StatusBadge status={h.risk_level} />
-                          <span className="text-slate-500 text-xs">{h.risk_score}/10</span>
+                          <span className="text-slate-500 text-xs font-semibold">{h.risk_score}/10</span>
                         </div>
                       </div>
-                      <p className="text-slate-500 text-xs">{h.detected_attack_type} · {new Date(h.created_at).toLocaleString()}</p>
+                      <p className="text-slate-400 text-xs">{h.detected_attack_type} · {new Date(h.created_at).toLocaleString()}</p>
                     </div>
                   ))}
                 </div>
@@ -162,7 +176,7 @@ export default function TrustTestPage() {
 function TestResult({ result }) {
   const cls = riskColors[result.risk_level] || riskColors.LOW
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className={`glass rounded-xl p-6 border ${cls} space-y-4`}>
+    <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className={`rounded-xl p-6 border ${cls} space-y-4 shadow-sm`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5" />
@@ -170,14 +184,14 @@ function TestResult({ result }) {
         </div>
         <span className="text-2xl font-black">{result.risk_score}<span className="text-sm font-normal opacity-60">/10</span></span>
       </div>
-      <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${result.risk_score * 10}%` }}
           className={`h-full rounded-full ${
             result.risk_level === 'LOW' ? 'bg-emerald-500' :
             result.risk_level === 'MEDIUM' ? 'bg-amber-500' :
-            result.risk_level === 'HIGH' ? 'bg-orange-500' : 'bg-red-500'
+            result.risk_level === 'HIGH' ? 'bg-orange-500' : 'bg-rose-500'
           }`}
           transition={{ duration: 0.8, ease: 'easeOut' }}
         />
@@ -192,9 +206,8 @@ function TestResult({ result }) {
 function InfoRow({ label, value }) {
   return (
     <div>
-      <p className="text-xs font-semibold opacity-70 mb-0.5">{label}</p>
-      <p className="text-sm opacity-90">{value}</p>
+      <p className="text-xs font-semibold opacity-75 mb-0.5">{label}</p>
+      <p className="text-sm opacity-95 leading-relaxed">{value}</p>
     </div>
   )
 }
-

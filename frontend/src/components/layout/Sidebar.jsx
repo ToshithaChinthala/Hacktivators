@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Shield, Zap, Lock, FileText, Settings,
-  ChevronLeft, ChevronRight, Activity, ShieldCheck, LogOut, User as UserIcon
+  ChevronLeft, ChevronRight, Activity, ShieldCheck, LogOut
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -37,11 +37,11 @@ export default function Sidebar() {
     <motion.aside
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ duration: 0.25, ease: 'easeInOut' }}
-      className="flex-shrink-0 h-screen sticky top-0 flex flex-col glass border-r border-violet-500/10 overflow-hidden z-40"
+      className="flex-shrink-0 h-screen sticky top-0 flex flex-col bg-white border-r border-slate-200/80 shadow-xs overflow-hidden z-40"
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-violet-500/10">
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center flex-shrink-0">
+      {/* Brand Logo */}
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-100">
+        <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-indigo-500/20">
           <Activity className="h-5 w-5 text-white" />
         </div>
         {!collapsed && (
@@ -51,41 +51,36 @@ export default function Sidebar() {
             exit={{ opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="text-sm font-bold text-white leading-tight">TrustSphere</div>
-            <div className="text-xs text-violet-400 font-medium">AI Platform</div>
+            <div className="text-sm font-bold text-slate-900 leading-tight tracking-tight">TrustSphere</div>
+            <div className="text-[11px] text-indigo-600 font-semibold tracking-wide">ENTERPRISE AI</div>
           </motion.div>
         )}
       </div>
 
-      {/* Nav */}
+      {/* Nav Items */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group relative ${
                 isActive
-                  ? 'bg-violet-600/20 text-violet-300 border border-violet-500/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                  ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200/60 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute inset-0 rounded-lg bg-violet-600/10"
-                    transition={{ duration: 0.2 }}
-                  />
-                )}
-                <Icon className="h-4 w-4 flex-shrink-0 relative z-10" />
+                <Icon className={`h-4 w-4 flex-shrink-0 transition-colors ${
+                  isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'
+                }`} />
                 {!collapsed && (
-                  <span className="relative z-10 truncate">{label}</span>
+                  <span className="truncate">{label}</span>
                 )}
                 {collapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  <div className="absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-md">
                     {label}
                   </div>
                 )}
@@ -95,22 +90,22 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* User Section & Logout */}
-      <div className="p-3 border-t border-violet-500/10 space-y-2">
+      {/* User Session & Logout */}
+      <div className="p-3 border-t border-slate-100 space-y-2">
         {!collapsed ? (
           <div className="space-y-2">
-            <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/5 border border-white/5">
-              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-slate-50 border border-slate-200/70">
+              <div className="h-7 w-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                 {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-white truncate" title={user?.email}>
+                <p className="text-xs font-semibold text-slate-800 truncate" title={user?.email}>
                   {user?.email || 'User'}
                 </p>
                 <span className={`inline-block text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded ${
                   user?.role === 'admin'
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                 }`}>
                   {user?.role || 'user'}
                 </span>
@@ -118,7 +113,7 @@ export default function Sidebar() {
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all"
             >
               <LogOut className="h-3.5 w-3.5" />
               Sign Out
@@ -127,7 +122,7 @@ export default function Sidebar() {
         ) : (
           <div className="flex flex-col items-center gap-2">
             <div
-              className="h-8 w-8 rounded-full bg-violet-600/30 text-violet-300 flex items-center justify-center text-xs font-bold"
+              className="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center text-xs font-bold"
               title={`${user?.email || 'User'} (${user?.role || 'user'})`}
             >
               {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
@@ -135,7 +130,7 @@ export default function Sidebar() {
             <button
               onClick={handleLogout}
               title="Sign Out"
-              className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -143,11 +138,11 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Collapse toggle */}
-      <div className="p-2 border-t border-violet-500/10">
+      {/* Collapse Toggle */}
+      <div className="p-2 border-t border-slate-100">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+          className="w-full flex items-center justify-center p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
