@@ -4,7 +4,7 @@ import {
   Files, CheckCircle, AlertTriangle, ShieldCheck, Zap, Shield, Lock, Activity,
   TrendingUp, Clock, RefreshCw
 } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import StatCard from '../components/ui/StatCard'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import StatusBadge from '../components/ui/StatusBadge'
@@ -58,10 +58,18 @@ export default function DashboardPage() {
     return () => clearTimeout(wsDebounceRef.current)
   }, [lastMessage, fetchData])
 
-  const chartData = activity.slice(0, 10).reverse().map((a, i) => ({
-    name: `T-${i}`,
-    events: 1,
-  }))
+  const verifiedCount = Number(stats.verified_files) || 0
+  const modifiedCount = Number(stats.modified_files) || 0
+  const totalEvaluated = verifiedCount + modifiedCount
+
+  const verifiedPct = totalEvaluated > 0 ? ((verifiedCount / totalEvaluated) * 100).toFixed(1) : '0.0'
+  const modifiedPct = totalEvaluated > 0 ? ((modifiedCount / totalEvaluated) * 100).toFixed(1) : '0.0'
+
+  const pieData = [
+    { name: 'Verified Files', value: verifiedCount, color: '#16A34A', percentage: verifiedPct },
+    { name: 'Modified Detections', value: modifiedCount, color: '#DC647D', percentage: modifiedPct },
+  ]
+  const chartSlices = pieData.filter((d) => d.value > 0)
 
   if (loading) {
     return (
@@ -102,41 +110,79 @@ export default function DashboardPage() {
 
       {/* Chart + Activity */}
       <div className="grid lg:grid-cols-3 gap-5">
-        {/* Activity chart */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
+        {/* File Verification Overview Pie Chart */}
+        <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-slate-900 font-semibold text-sm">Activity Overview</h3>
-            <span className="text-xs font-medium text-slate-500">Last {activity.length} events</span>
+            <h3 className="text-slate-900 font-semibold text-sm">File Verification Overview</h3>
+            <span className="text-xs font-medium text-slate-500">Total Analyzed: {totalEvaluated}</span>
           </div>
-          {activity.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-slate-400 text-sm">
-              No activity yet — start using modules to see data here.
+          {totalEvaluated === 0 ? (
+            <div className="h-44 flex flex-col items-center justify-center text-slate-400 text-sm">
+              <p className="font-medium text-slate-500">No verification data yet</p>
+              <p className="text-xs text-slate-400 mt-0.5">Verified files and modified detections will appear here.</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="indigoGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.18} />
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 8,
-                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
-                  }}
-                  labelStyle={{ color: '#475569', fontSize: 11, fontWeight: 600 }}
-                  itemStyle={{ color: '#4f46e5', fontSize: 11, fontWeight: 500 }}
-                />
-                <Area type="monotone" dataKey="events" stroke="#4f46e5" fill="url(#indigoGrad)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 h-44">
+              <div className="w-full sm:w-1/2 h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip
+                      contentStyle={{
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 8,
+                        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
+                        fontSize: 12,
+                      }}
+                      itemStyle={{ fontWeight: 600 }}
+                      formatter={(val, name, entry) => [
+                        `${val} files (${entry.payload.percentage}%)`,
+                        name,
+                      ]}
+                    />
+                    <Pie
+                      data={chartSlices}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={36}
+                      outerRadius={64}
+                      paddingAngle={chartSlices.length > 1 ? 4 : 0}
+                      dataKey="value"
+                      isAnimationActive={true}
+                      animationDuration={700}
+                    >
+                      {chartSlices.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} stroke="#ffffff" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Legend & Breakdown */}
+              <div className="w-full sm:w-1/2 flex flex-col justify-center space-y-2.5 pr-2">
+                {pieData.map((item) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="h-3 w-3 rounded-full flex-shrink-0 shadow-2xs"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span className="text-xs font-semibold text-slate-700">{item.name}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-slate-900">{item.value}</span>
+                      <span className="text-[11px] text-slate-500 font-medium ml-1.5">
+                        ({item.percentage}%)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
